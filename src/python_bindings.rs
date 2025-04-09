@@ -1172,10 +1172,16 @@ except argparse.ArgumentError:
             })
     }
 
-    #[pyo3(text_signature = "($self)")]
-    fn unlock_coldkey(&mut self) -> PyResult<PyKeypair> {
+    #[pyo3(
+        name = "unlock_coldkey",
+        signature = (password=None)
+    )]
+    fn unlock_coldkey(
+        &mut self,
+        password: Option<String>
+    ) -> PyResult<PyKeypair> {
         self.inner
-            .unlock_coldkey()
+            .unlock_coldkey(password)
             .map(|inner| PyKeypair { inner })
             .map_err(|e| match e {
                 KeyFileError::DecryptionError(_) => PyErr::new::<PyPasswordError, _>(format!(
@@ -1186,10 +1192,16 @@ except argparse.ArgumentError:
             })
     }
 
-    #[pyo3(text_signature = "($self)")]
-    fn unlock_coldkeypub(&mut self) -> PyResult<PyKeypair> {
+    #[pyo3(
+        name = "unlock_coldkeypub",
+        signature = (password=None)
+    )]
+    fn unlock_coldkeypub(
+        &mut self,
+        password: Option<String>
+    ) -> PyResult<PyKeypair> {
         self.inner
-            .unlock_coldkeypub()
+            .unlock_coldkeypub(password)
             .map(|inner| PyKeypair { inner })
             .map_err(|e| match e {
                 KeyFileError::DecryptionError(_) => PyErr::new::<PyPasswordError, _>(format!(
@@ -1200,10 +1212,16 @@ except argparse.ArgumentError:
             })
     }
 
-    #[pyo3(text_signature = "($self)")]
-    fn unlock_hotkey(&mut self) -> PyResult<PyKeypair> {
+    #[pyo3(
+        name = "unlock_hotkey",
+        signature = (password=None)
+    )]
+    fn unlock_hotkey(
+        &mut self,
+        password: Option<String>
+    ) -> PyResult<PyKeypair> {
         self.inner
-            .unlock_hotkey()
+            .unlock_hotkey(password)
             .map(|inner| PyKeypair { inner })
             .map_err(|e| match e {
                 KeyFileError::DecryptionError(_) => PyErr::new::<PyPasswordError, _>(format!(

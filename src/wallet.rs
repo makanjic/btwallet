@@ -507,10 +507,13 @@ impl Wallet {
     }
 
     /// Unlocks the coldkey.
-    pub fn unlock_coldkey(&mut self) -> Result<Keypair, KeyFileError> {
+    pub fn unlock_coldkey(
+        &mut self,
+        password: Option<String>
+    ) -> Result<Keypair, KeyFileError> {
         if self._coldkey.is_none() {
             let coldkey_file = self.coldkey_file()?;
-            self._coldkey = Some(coldkey_file.get_keypair(None)?);
+            self._coldkey = Some(coldkey_file.get_keypair(password)?);
         }
         let _coldkey = self
             ._coldkey
@@ -520,10 +523,13 @@ impl Wallet {
     }
 
     /// Unlocks the coldkeypub.
-    pub fn unlock_coldkeypub(&mut self) -> Result<Keypair, KeyFileError> {
+    pub fn unlock_coldkeypub(
+        &mut self,
+        password: Option<String>
+    ) -> Result<Keypair, KeyFileError> {
         if self._coldkeypub.is_none() {
             let coldkeypub_file = self.coldkeypub_file()?;
-            self._coldkeypub = Some(coldkeypub_file.get_keypair(None)?);
+            self._coldkeypub = Some(coldkeypub_file.get_keypair(password)?);
         }
         let _coldkeypub = self
             ._coldkeypub
@@ -533,10 +539,13 @@ impl Wallet {
     }
 
     /// Unlocks the hotkey.
-    pub fn unlock_hotkey(&mut self) -> Result<Keypair, KeyFileError> {
+    pub fn unlock_hotkey(
+        &mut self,
+        password: Option<String>
+    ) -> Result<Keypair, KeyFileError> {
         if self._hotkey.is_none() {
             let hotkey_file = self.hotkey_file()?;
-            self._hotkey = Some(hotkey_file.get_keypair(None)?);
+            self._hotkey = Some(hotkey_file.get_keypair(password)?);
         }
         let _hotkey = self
             ._hotkey
