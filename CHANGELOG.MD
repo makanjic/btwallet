@@ -1,5 +1,54 @@
 # Changelog
 
+## 3.1.0 /2025-07-07
+
+## What's Changed
+* Add `hotkeypub` to bittensor-wallet by @basfroman in https://github.com/opentensor/btwallet/pull/156
+
+**Full Changelog**: https://github.com/opentensor/btwallet/compare/v3.0.11...v3.1.0
+
+## 3.0.11 /2025-06-26
+
+## What's Changed
+* update deps by @basfroman in https://github.com/opentensor/btwallet/pull/141
+* Improvements on the top of https://github.com/opentensor/btwallet/pull/140 by @basfroman in https://github.com/opentensor/btwallet/pull/145
+* chore(pyo3): use CARGO_PKG_VERSION to auto-sync Python binding version with crate by @LVivona in https://github.com/opentensor/btwallet/pull/140
+* Add `arm64` wheels by @basfroman in https://github.com/opentensor/btwallet/pull/147
+* Replace py-bip39-bindings deps with stored list of words by @basfroman in https://github.com/opentensor/btwallet/pull/151
+
+## New Contributors
+* @LVivona made their first contribution in https://github.com/opentensor/btwallet/pull/140
+
+**Full Changelog**: https://github.com/opentensor/btwallet/compare/v3.0.10...v3.0.11
+
+## 3.0.11-rc.1 /2025-06-11
+
+## What's Changed
+* update deps by @basfroman in https://github.com/opentensor/btwallet/pull/141
+* Improvements on the top of https://github.com/opentensor/btwallet/pull/140 by @basfroman in https://github.com/opentensor/btwallet/pull/145
+* chore(pyo3): use CARGO_PKG_VERSION to auto-sync Python binding version with crate by @LVivona in https://github.com/opentensor/btwallet/pull/140
+* Add `arm64` wheels by @basfroman in https://github.com/opentensor/btwallet/pull/147
+
+## New Contributors
+* @LVivona made their first contribution in https://github.com/opentensor/btwallet/pull/140
+
+**Full Changelog**: https://github.com/opentensor/btwallet/compare/v3.0.10...v3.0.11-rc.1
+
+## 3.0.10 /2025-05-12
+
+## What's Changed
+* Fix regenerate key by seed (`seed.trim_start_matches("0x")) by @basfroman in https://github.com/opentensor/btwallet/pull/136
+
+**Full Changelog**: https://github.com/opentensor/btwallet/compare/v3.0.9...v3.0.10
+
+## 3.0.9 /2025-04-28
+
+## What's Changed
+* Small fixes by @basfroman in https://github.com/opentensor/btwallet/pull/131
+* Update deps by @basfroman in https://github.com/opentensor/btwallet/pull/132
+
+**Full Changelog**: https://github.com/opentensor/btwallet/compare/v3.0.8...v3.0.9
+
 ## 3.0.8 /2025-04-09
 
 ## What's Changed

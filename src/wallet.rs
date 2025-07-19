@@ -37,6 +37,7 @@ pub struct Wallet {
     _coldkey: Option<Keypair>,
     _coldkeypub: Option<Keypair>,
     _hotkey: Option<Keypair>,
+    _hotkeypub: Option<Keypair>,
 }
 
 impl fmt::Display for Wallet {
@@ -95,6 +96,7 @@ impl Wallet {
             _coldkey: None,
             _coldkeypub: None,
             _hotkey: None,
+            _hotkeypub: None,
         }
     }
 
@@ -146,7 +148,7 @@ impl Wallet {
         parser
     }
 
-    /// Checks for existing coldkeypub and hotkeys, and creates them if non-existent.
+    /// Checks for existing coldkeypub, hotkeypub, hotkeys, and creates them if non-existent.
     pub fn create_if_non_existent(
         &mut self,
         coldkey_use_password: bool,
@@ -212,7 +214,10 @@ impl Wallet {
             println!("ColdKey for the wallet '{}' already exists.", self.name);
         }
 
-        if overwrite || !self.hotkey_file()?.exists_on_device()? {
+        if overwrite
+            || !self.hotkey_file()?.exists_on_device()?
+                && !self.hotkeypub_file()?.exists_on_device()?
+        {
             self.create_new_hotkey(
                 12,
                 hotkey_use_password,
@@ -312,6 +317,20 @@ impl Wallet {
         )
     }
 
+    pub fn hotkeypub_file(&self) -> Result<Keyfile, KeyFileError> {
+        // concatenate wallet path
+        let wallet_path = self._path.join(&self.name);
+
+        // concatenate hotkeypub path
+        let hotkeypub_path = wallet_path.join("hotkeypub.txt");
+
+        Keyfile::new(
+            hotkeypub_path.to_string_lossy().into_owned(),
+            Some("hotkeypub.txt".to_string()),
+            false,
+        )
+    }
+
     /// Returns the coldkeypub file.
     pub fn coldkeypub_file(&self) -> Result<Keyfile, KeyFileError> {
         // concatenate wallet path
@@ -351,6 +370,12 @@ impl Wallet {
             let hotkey_file = self.hotkey_file()?;
             hotkey_file.get_keypair(None)
         }
+    }
+
+    /// Returns the hotkeypub from wallet.path/wallet.name/hotkeypub.txt or raises an error.
+    pub fn hotkeypub_property(&self) -> Result<Keypair, KeyFileError> {
+        let hotkeypub_file = self.hotkeypub_file()?;
+        hotkeypub_file.get_keypair(None)
     }
 
     /// Returns the name of the wallet
@@ -432,6 +457,27 @@ impl Wallet {
             .set_keypair(keypair, encrypt, overwrite, hotkey_password)
     }
 
+    /// Sets the hotkeypub for the wallet.
+    pub fn set_hotkeypub(
+        &mut self,
+        keypair: Keypair,
+        encrypt: bool,
+        overwrite: bool,
+    ) -> Result<(), KeyFileError> {
+        let ss58_address = keypair
+            .ss58_address()
+            .ok_or_else(|| KeyFileError::Generic("Failed to get ss58_address".to_string()))?;
+        let hotkeypub_keypair = Keypair::new(Some(ss58_address), None, None, 42, None, 1)
+            .map_err(|e| KeyFileError::Generic(e.to_string()))?;
+
+        self._hotkeypub = Some(hotkeypub_keypair.clone());
+        self.hotkeypub_file()
+            .map_err(|e| KeyFileError::Generic(e.to_string()))?
+            .set_keypair(hotkeypub_keypair, encrypt, overwrite, None)
+            .map_err(|e| KeyFileError::Generic(e.to_string()))?;
+        Ok(())
+    }
+
     /// Gets the coldkey from the wallet.
     pub fn get_coldkey(&self, password: Option<String>) -> Result<Keypair, KeyFileError> {
         self.coldkey_file()?.get_keypair(password)
@@ -445,6 +491,11 @@ impl Wallet {
     /// Gets the hotkey from the wallet.
     pub fn get_hotkey(&self, password: Option<String>) -> Result<Keypair, KeyFileError> {
         self.hotkey_file()?.get_keypair(password)
+    }
+
+    /// Gets the hotkeypub from the wallet.
+    pub fn get_hotkeypub(&self, password: Option<String>) -> Result<Keypair, KeyFileError> {
+        self.hotkeypub_file()?.get_keypair(password)
     }
 
     /// Creates coldkey from uri string, optionally encrypts it with the user-provided password.
@@ -503,6 +554,7 @@ impl Wallet {
             save_hotkey_to_env,
             hotkey_password,
         )?;
+        self.set_hotkeypub(keypair, false, overwrite)?;
         Ok(self.clone())
     }
 
@@ -552,6 +604,19 @@ impl Wallet {
             .clone()
             .ok_or_else(|| KeyFileError::Generic("Hotkey doesn't exist.".to_string()))?;
         Ok(_hotkey)
+    }
+
+    /// Unlocks the hotkeypub.
+    pub fn unlock_hotkeypub(&mut self) -> Result<Keypair, KeyFileError> {
+        if self._hotkeypub.is_none() {
+            let hotkeypub_file = self.hotkeypub_file()?;
+            self._hotkeypub = Some(hotkeypub_file.get_keypair(None)?);
+        }
+        let _hotkeypub = self
+            ._hotkeypub
+            .clone()
+            .ok_or_else(|| KeyFileError::Generic("Hotkey file doesn't exist.".to_string()))?;
+        Ok(_hotkeypub)
     }
 
     /// Creates a new coldkey, optionally encrypts it with the user-provided password and saves to disk.
@@ -661,6 +726,55 @@ impl Wallet {
             save_hotkey_to_env,
             hotkey_password,
         )?;
+
+        self.set_hotkeypub(keypair.clone(), false, overwrite)?;
+
+        Ok(self.clone())
+    }
+
+    /// Regenerates the coldkey from the passed mnemonic or seed, or JSON encrypts it with the user's password and saves the file.
+    #[allow(clippy::too_many_arguments)]
+    pub fn regenerate_coldkey(
+        &mut self,
+        mnemonic: Option<String>,
+        seed: Option<String>,
+        json: Option<(String, String)>,
+        use_password: bool,
+        overwrite: bool,
+        suppress: bool,
+        save_coldkey_to_env: bool,
+        coldkey_password: Option<String>,
+    ) -> Result<Self, WalletError> {
+        let keypair = if let Some(mnemonic) = mnemonic {
+            // mnemonic
+            let keypair = Keypair::create_from_mnemonic(&mnemonic)
+                .map_err(|e| WalletError::KeyGeneration(e.to_string()))?;
+            if !suppress {
+                display_mnemonic_msg(mnemonic, "coldkey");
+            }
+            keypair
+        } else if let Some(seed) = seed {
+            // seed
+            Keypair::create_from_seed(hex::decode(seed.trim_start_matches("0x")).unwrap())
+                .map_err(|e| KeyFileError::Generic(e.to_string()))?
+        } else if let Some((json_data, passphrase)) = json {
+            // json_data + passphrase
+            Keypair::create_from_encrypted_json(&json_data, &passphrase)
+                .map_err(|e| KeyFileError::Generic(e.to_string()))?
+        } else {
+            return Err(WalletError::InvalidInput(
+                "Must pass either mnemonic, seed, or json.".to_string(),
+            ));
+        };
+
+        self.set_coldkey(
+            keypair.clone(),
+            use_password,
+            overwrite,
+            save_coldkey_to_env,
+            coldkey_password,
+        )?;
+        self.set_coldkeypub(keypair.clone(), false, overwrite)?;
         Ok(self.clone())
     }
 
@@ -701,52 +815,6 @@ impl Wallet {
         Ok(self.clone())
     }
 
-    /// Regenerates the coldkey from the passed mnemonic or seed, or JSON encrypts it with the user's password and saves the file.
-    #[allow(clippy::too_many_arguments)]
-    pub fn regenerate_coldkey(
-        &mut self,
-        mnemonic: Option<String>,
-        seed: Option<String>,
-        json: Option<(String, String)>,
-        use_password: bool,
-        overwrite: bool,
-        suppress: bool,
-        save_coldkey_to_env: bool,
-        coldkey_password: Option<String>,
-    ) -> Result<Self, WalletError> {
-        let keypair = if let Some(mnemonic) = mnemonic {
-            // mnemonic
-            let keypair = Keypair::create_from_mnemonic(&mnemonic)
-                .map_err(|e| WalletError::KeyGeneration(e.to_string()))?;
-            if !suppress {
-                display_mnemonic_msg(mnemonic, "coldkey");
-            }
-            keypair
-        } else if let Some(seed) = seed {
-            // seed
-            Keypair::create_from_seed(hex::decode(seed).unwrap())
-                .map_err(|e| KeyFileError::Generic(e.to_string()))?
-        } else if let Some((json_data, passphrase)) = json {
-            // json_data + passphrase
-            Keypair::create_from_encrypted_json(&json_data, &passphrase)
-                .map_err(|e| KeyFileError::Generic(e.to_string()))?
-        } else {
-            return Err(WalletError::InvalidInput(
-                "Must pass either mnemonic, seed, or json.".to_string(),
-            ));
-        };
-
-        self.set_coldkey(
-            keypair.clone(),
-            use_password,
-            overwrite,
-            save_coldkey_to_env,
-            coldkey_password,
-        )?;
-        self.set_coldkeypub(keypair.clone(), false, overwrite)?;
-        Ok(self.clone())
-    }
-
     /// Regenerates the hotkey from passed mnemonic or seed, encrypts it with the user's password and saves the file.
     pub fn regenerate_hotkey(
         &mut self,
@@ -769,7 +837,7 @@ impl Wallet {
             keypair
         } else if let Some(seed) = seed {
             // seed
-            Keypair::create_from_seed(hex::decode(seed).unwrap())
+            Keypair::create_from_seed(hex::decode(seed.trim_start_matches("0x")).unwrap())
                 .map_err(|e| KeyFileError::Generic(e.to_string()))?
         } else if let Some((json_data, passphrase)) = json {
             // json_data + passphrase
@@ -782,13 +850,50 @@ impl Wallet {
         };
 
         self.set_hotkey(
-            keypair,
+            keypair.clone(),
             use_password,
             overwrite,
             save_hotkey_to_env,
             hotkey_password,
         )?;
+        self.set_hotkeypub(keypair.clone(), false, overwrite)?;
+        Ok(self.clone())
+    }
 
+    /// Regenerates the hotkeypub from the passed ss58_address or public_key and saves the file.
+    /// Requires either ss58_address or public_key to be passed.
+    pub fn regenerate_hotkeypub(
+        &mut self,
+        ss58_address: Option<String>,
+        public_key: Option<String>,
+        overwrite: bool,
+    ) -> Result<Self, WalletError> {
+        if ss58_address.is_none() && public_key.is_none() {
+            return Err(WalletError::InvalidInput(
+                "Either ss58_address or public_key must be passed.".to_string(),
+            ));
+        }
+
+        let address_to_string = ss58_address
+            .as_ref()
+            .or(public_key.as_ref())
+            .ok_or_else(|| WalletError::InvalidInput("No address provided".to_string()))?;
+
+        if !is_valid_bittensor_address_or_public_key(address_to_string) {
+            return Err(WalletError::InvalidInput(format!(
+                "Invalid {}.",
+                if ss58_address.is_some() {
+                    "ss58_address"
+                } else {
+                    "public_key"
+                }
+            )));
+        }
+
+        let keypair = Keypair::new(ss58_address, public_key, None, 42, None, 1)
+            .map_err(|e| WalletError::KeyGeneration(e.to_string()))?;
+
+        self.set_hotkeypub(keypair, false, overwrite)?;
         Ok(self.clone())
     }
 }

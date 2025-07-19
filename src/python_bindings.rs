@@ -479,23 +479,27 @@ fn bittensor_wallet(module: Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Wallet>()?;
 
     // Add submodules to the main module
-    register_config_module(module.clone())?;
-    register_errors_module(module.clone())?;
-    register_keyfile_module(module.clone())?;
-    register_keypair_module(module.clone())?;
-    register_utils_module(module.clone())?;
-    register_wallet_module(module)?;
+    register_config_module(&module)?;
+    register_errors_module(&module)?;
+    register_keyfile_module(&module)?;
+    register_keypair_module(&module)?;
+    register_utils_module(&module)?;
+    register_wallet_module(&module)?;
+
+    // Add cargo package versions
+    module.add("__version__", env!("CARGO_PKG_VERSION"))?;
+
     Ok(())
 }
 
 // Define the submodule registration functions
-fn register_config_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_config_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let config_module = PyModule::new_bound(main_module.py(), "config")?;
     config_module.add_class::<Config>()?;
     main_module.add_submodule(&config_module)
 }
 
-fn register_errors_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_errors_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let errors_module = PyModule::new_bound(main_module.py(), "errors")?;
     // Register the WalletError exception
     errors_module.add_class::<PyWalletError>()?;
@@ -567,7 +571,7 @@ fn py_decrypt_keyfile_data(
 }
 
 // keyfile module with functions
-fn register_keyfile_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_keyfile_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let keyfile_module = PyModule::new_bound(main_module.py(), "keyfile")?;
     keyfile_module.add_function(wrap_pyfunction!(
         py_serialized_keypair_to_keyfile_data,
@@ -613,7 +617,7 @@ fn register_keyfile_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
     main_module.add_submodule(&keyfile_module)
 }
 
-fn register_keypair_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_keypair_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let keypair_module = PyModule::new_bound(main_module.py(), "keypair")?;
     keypair_module.add_class::<PyKeypair>()?;
     main_module.add_submodule(&keypair_module)
@@ -665,7 +669,7 @@ fn py_is_valid_bittensor_address_or_public_key(address: &Bound<'_, PyAny>) -> bo
     })
 }
 
-fn register_utils_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_utils_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let utils_module = PyModule::new_bound(main_module.py(), "utils")?;
     utils_module.add_function(wrap_pyfunction!(
         crate::utils::is_valid_ss58_address,
@@ -686,7 +690,7 @@ fn register_utils_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
     main_module.add_submodule(&utils_module)
 }
 
-fn register_wallet_module(main_module: Bound<'_, PyModule>) -> PyResult<()> {
+fn register_wallet_module(main_module: &Bound<'_, PyModule>) -> PyResult<()> {
     let wallet_module = PyModule::new_bound(main_module.py(), "wallet")?;
     wallet_module.add_function(wrap_pyfunction!(
         crate::wallet::display_mnemonic_msg,
@@ -996,6 +1000,15 @@ except argparse.ArgumentError:
         Ok(PyKeypair { inner: keypair })
     }
 
+    #[pyo3(signature = (password=None))]
+    fn get_hotkeypub(&self, password: Option<String>) -> PyResult<PyKeypair> {
+        let keypair = self
+            .inner
+            .get_hotkeypub(password)
+            .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))?;
+        Ok(PyKeypair { inner: keypair })
+    }
+
     #[pyo3(signature = (keypair, encrypt=true, overwrite=false, save_coldkey_to_env=false, coldkey_password=None))]
     fn set_coldkey(
         &mut self,
@@ -1048,6 +1061,18 @@ except argparse.ArgumentError:
             .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))
     }
 
+    #[pyo3(signature = (keypair, encrypt=false, overwrite=false))]
+    fn set_hotkeypub(
+        &mut self,
+        keypair: PyKeypair,
+        encrypt: bool,
+        overwrite: bool,
+    ) -> PyResult<()> {
+        self.inner
+            .set_hotkeypub(keypair.inner, encrypt, overwrite)
+            .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))
+    }
+
     // Getters
     #[getter(coldkey)]
     fn coldkey_py_property(&self) -> PyResult<PyKeypair> {
@@ -1073,6 +1098,14 @@ except argparse.ArgumentError:
         Ok(PyKeypair { inner: keypair })
     }
 
+    #[getter(hotkeypub)]
+    fn hotkeypub_py_property(&self) -> PyResult<PyKeypair> {
+        let keypair = self.inner.hotkeypub_property().map_err(|e| {
+            PyErr::new::<PyKeyFileError, _>(format!("Failed to get hotkeypub: {:?}", e))
+        })?;
+        Ok(PyKeypair { inner: keypair })
+    }
+
     #[getter]
     fn coldkey_file(&self) -> PyResult<PyKeyfile> {
         self.inner
@@ -1093,6 +1126,14 @@ except argparse.ArgumentError:
     fn hotkey_file(&self) -> PyResult<PyKeyfile> {
         self.inner
             .hotkey_file()
+            .map(|inner| PyKeyfile { inner })
+            .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))
+    }
+
+    #[getter]
+    fn hotkeypub_file(&self) -> PyResult<PyKeyfile> {
+        self.inner
+            .hotkeypub_file()
             .map(|inner| PyKeyfile { inner })
             .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))
     }
@@ -1222,6 +1263,20 @@ except argparse.ArgumentError:
     ) -> PyResult<PyKeypair> {
         self.inner
             .unlock_hotkey(password)
+            .map(|inner| PyKeypair { inner })
+            .map_err(|e| match e {
+                KeyFileError::DecryptionError(_) => PyErr::new::<PyPasswordError, _>(format!(
+                    "Decryption failed: {}",
+                    e.to_string()
+                )),
+                _ => PyErr::new::<PyKeyFileError, _>(format!("Failed to unlock hotkey: {:?}", e)),
+            })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    fn unlock_hotkeypub(&mut self) -> PyResult<PyKeypair> {
+        self.inner
+            .unlock_hotkeypub()
             .map(|inner| PyKeypair { inner })
             .map_err(|e| match e {
                 KeyFileError::DecryptionError(_) => PyErr::new::<PyPasswordError, _>(format!(
@@ -1386,6 +1441,23 @@ except argparse.ArgumentError:
             .map_err(|e| {
                 PyErr::new::<PyKeyFileError, _>(format!("Failed to regenerate hotkey: {:?}", e))
             })?;
+        self.inner = new_inner_wallet;
+        Ok(Wallet {
+            inner: self.inner.clone(),
+        })
+    }
+
+    #[pyo3(signature = (ss58_address=None, public_key=None, overwrite=None))]
+    fn regenerate_hotkeypub(
+        &mut self,
+        ss58_address: Option<String>,
+        public_key: Option<String>,
+        overwrite: Option<bool>,
+    ) -> PyResult<Self> {
+        let new_inner_wallet = self
+            .inner
+            .regenerate_hotkeypub(ss58_address, public_key, overwrite.unwrap_or(false))
+            .map_err(|e| PyErr::new::<PyKeyFileError, _>(e))?;
         self.inner = new_inner_wallet;
         Ok(Wallet {
             inner: self.inner.clone(),
